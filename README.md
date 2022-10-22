@@ -16,7 +16,7 @@ python nba_ML.py tune
 python nba_ML.py notune
 ```
 ### Feature Importances
-![alt text](https://github.com/bszek213/nbaML/blob/dev/FeatureImportances.png)
+![alt text](https://github.com/bszek213/nbaML/blob/master/FeatureImportance.png)
 
 ### Correlation Matrix
 ![alt text](https://github.com/bszek213/nbaML/blob/dev/correlations.png)
