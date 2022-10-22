@@ -20,9 +20,9 @@ from os import getcwd, mkdir
 from os.path import join, exists
 # from scipy import stats
 import yaml
-# from sklearn.inspection import permutation_importance
-# from eli5.sklearn import PermutationImportance
-# from eli5 import show_weights
+from sklearn.inspection import permutation_importance
+from eli5.sklearn import PermutationImportance
+from eli5 import show_weights
 # import pickle
 import sys
 from scipy import stats
@@ -45,7 +45,7 @@ class nba_regressor():
                 self.hyper_param_dict = yaml.load(file, Loader=yaml.FullLoader)
     def get_teams(self):
         year_list_find = []
-        year_list = [2022,2021,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010]#2023,,2009,2008,2007,2006,2005,2004,2003,2002,2001,2000]
+        year_list = [2023,2022,2021,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010]#2023,,2009,2008,2007,2006,2005,2004,2003,2002,2001,2000]
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)
@@ -179,6 +179,7 @@ class nba_regressor():
             return RandForclass
     def predict_two_teams(self,model):
         while True:
+            print(f'list of teams: {sorted(team_list)}')
             try:
                 team_1 = input('team_1: ')
                 if team_1 == 'exit':
@@ -348,6 +349,37 @@ class nba_regressor():
                 # print(f'score prediction for {team_2}: {score_val_2}')
             except Exception as e:
                 print(f'Team not found: {e}')
+    def feature_importances(self,model):
+        if model != "no model":
+            if 'keras' in str(model):
+                imps = PermutationImportance(model,random_state=1).fit(self.x_test, self.y_test)
+                print(show_weights(imps,feature_names=self.x_test.columns))
+            else:
+                imps = permutation_importance(model, self.x_test, self.y_test)
+            if 'MLPClassifier' or 'LinearRegression' or 'PassiveAggressive' or 'keras' in str(model):
+                feature_imp = pd.Series(imps.importances_mean,index=self.x_test.columns).sort_values(ascending=False)
+                plt.close()
+                plt.figure()
+                sns.barplot(x=feature_imp,y=feature_imp.index)
+                plt.xlabel('Feature Importance')
+                plt.ylabel('Features')
+                title_name = f'FeatureImportance - {str(model)}'
+                plt.title(title_name,fontdict={'fontsize': 6})
+                save_name = 'FeatureImportance' + '.png'
+                plt.tight_layout()
+                plt.savefig(join(getcwd(), save_name), dpi=300)
+            else:
+                feature_imp = pd.Series(model.feature_importances_,index=self.x_test.columns).sort_values(ascending=False)
+                plt.close()
+                plt.figure()
+                sns.barplot(x=feature_imp,y=feature_imp.index)
+                plt.xlabel('Feature Importance')
+                plt.ylabel('Features')
+                title_name = f'FeatureImportance - {str(model)}'
+                plt.title(title_name,fontdict={'fontsize': 6})
+                save_name = 'FeatureImportanceRegress' + '.png'
+                plt.tight_layout()
+                plt.savefig(join(getcwd(), save_name), dpi=300)
 def main():
     start_time = time.time()
     class_inst = nba_regressor()
@@ -357,7 +389,7 @@ def main():
     model = class_inst.machine()
     if not sys.argv[1] == 'tune':
         class_inst.predict_two_teams(model)
-    #     cfb_class.feature_importances(model)
+        class_inst.feature_importances(model)
     print("--- %s seconds ---" % (time.time() - start_time))
 if __name__ == '__main__':
     main()
