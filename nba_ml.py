@@ -14,7 +14,8 @@ import seaborn as sns
 from sklearn.metrics import r2_score, mean_squared_error #explained_variance_score
 import time
 from sklearn.model_selection import GridSearchCV
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
 # from scipy.stats import uniform
 from os import getcwd, mkdir
 from os.path import join, exists
@@ -108,8 +109,8 @@ class nba_regressor():
             Q1 = np.percentile(self.x_no_corr[col_name], 25)
             Q3 = np.percentile(self.x_no_corr[col_name], 75)
             IQR = Q3 - Q1
-            upper = np.where(self.x_no_corr[col_name] >= (Q3+5.0*IQR)) #1.5 is the standard, use two to see if more data helps improve model performance
-            lower = np.where(self.x_no_corr[col_name] <= (Q1-5.0*IQR)) 
+            upper = np.where(self.x_no_corr[col_name] >= (Q3+2.0*IQR)) #1.5 is the standard, use two to see if more data helps improve model performance
+            lower = np.where(self.x_no_corr[col_name] <= (Q1-2.0*IQR)) 
             self.x_no_corr.drop(upper[0], inplace = True)
             self.x_no_corr.drop(lower[0], inplace = True)
             self.y.drop(upper[0], inplace = True)
@@ -192,17 +193,24 @@ class nba_regressor():
                 learning_rate_init=0.001,
                 max_iter=900,
                 solver='lbfgs'
-                ).fit(self.x_train,self.y_train)
-            MLP_err = r2_score(self.y_test, MLPClass.predict(self.x_test))
-            MLP_rmse = np.sqrt(mean_squared_error(self.y_test, MLPClass.predict(self.x_test)))
-            print('MultiLayerPerceptron rmse',MLP_rmse)
-            print('MultiLayerPerceptron accuracy',MLP_err)
+                )
+            ADA_with_MLP = AdaBoostRegressor(base_estimator=MLPClass,random_state=0, n_estimators=100).fit(self.x_train,self.y_train)
+            MLP_err = r2_score(self.y_test, ADA_with_MLP.predict(self.x_test))
+            MLP_rmse = np.sqrt(mean_squared_error(self.y_test, ADA_with_MLP.predict(self.x_test)))
+            #LINEAR REGRESSION
+            LinReg = LinearRegression()
+            linClass = LinReg.fit(self.x_train,self.y_train)
+            Line_err = r2_score(self.y_test, linClass.predict(self.x_test))
+            Line_rmse = np.sqrt(mean_squared_error(self.y_test, linClass.predict(self.x_test)))
+            print('Adaboost with MultiLayerPerceptron rmse',MLP_rmse)
+            print('Adaboost with MultiLayerPerceptron accuracy',MLP_err)
             print('RandomForestRegressor rmse',RAND_rmse)
             print('RandomForestRegressor accuracy',RandForclass_err)
-            return [RandForclass,MLPClass]
+            print('LinearRegression rmse',Line_rmse)
+            print('LinearRegression accuracy',Line_err)
+            return [RandForclass,ADA_with_MLP,LinReg]
     def predict_two_teams(self,models):
         while True:
-            for model in models:
                 print(f'list of teams: {sorted(team_list)}')
                 try:
                     team_1 = input('team_1: ')
@@ -268,154 +276,162 @@ class nba_regressor():
                     df_features_2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
                     team_1_total = 0
                     team_2_total = 0
-                    print('============================================================')
-                    
-                    # if team_1_loc == 'home':
-                    #     team_2_loc = 0
-                    #     team_1_loc = 1
-                    # elif team_1_loc == 'away':
-                    #     team_2_loc = 1
-                    #     team_1_loc = 0
-                    # data1['game_loc'] = team_1_loc
-                    # data2['game_loc'] = team_2_loc
-                    
-                    game_won_team_1 = []
-                    game_won_team_2 = []
-                    data1 = final_data_1.dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
-                    #MOVING AVERAGE ACROSS TWO SEASONS
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        data1 = final_data_1.rolling(10).mean()
-                        data2 = final_data_2.rolling(10).mean()
-                        data1 = data1.iloc[-1:]
-                        data2 = data2.iloc[-1:]
-                        print(data1)
-                        team_1_data_all = model.predict(data1)
-                        team_2_data_all = model.predict(data2)
-                        # if team_1_data_all[0] > team_2_data_all[0]:
-                        #     team_1_total += 1
-                        #     game_won_team_1.append('season')
-                        # else:
-                        #     team_2_total += 1
-                        #     game_won_team_2.append('season')
-                        print(f'Score prediction for {team_1} across 2022 and 2023 season FROM MOVING AVERAGE: {team_1_data_all[0]} points')
-                        print(f'Score prediction for {team_2} across 2022 and 2023 season FROM MOVING AVERAGE: {team_2_data_all[0]} points')
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_all = model.predict(data1)
-                        team_2_data_all = model.predict(data2)
-                        if team_1_data_all[0] > team_2_data_all[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('season')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('season')
-                        print(f'Score prediction for {team_1} across 2022 and 2023 season: {team_1_data_all[0]} points')
-                        print(f'Score prediction for {team_2} across 2022 and 2023 season: {team_2_data_all[0]} points')
-                        print('====')
-                    data1 = final_data_1.iloc[-1:].dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.iloc[-1:].dropna().median(axis=0,skipna=True).to_frame().T
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_last = model.predict(data1)
-                        team_2_data_last = model.predict(data2)
-                        if team_1_data_last[0] > team_2_data_last[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('last_game')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('last_game')
-                        print(f'Score prediction for {team_1} last game: {team_1_data_last[0]} points')
-                        print(f'Score prediction for {team_2} last game: {team_2_data_last[0]} points')
-                        print('====')
-                    data1 = final_data_1.iloc[-3:].dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.iloc[-3:].dropna().median(axis=0,skipna=True).to_frame().T
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_last = model.predict(data1)
-                        team_2_data_last = model.predict(data2)
-                        if team_1_data_last[0] > team_2_data_last[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('last_3_game')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('last_3_game')
-                        print(f'Score prediction for {team_1} last 3 games: {team_1_data_last[0]} points')
-                        print(f'Score prediction for {team_2} last 3 games: {team_2_data_last[0]} points')
-                        print('====')
-                    data1 = final_data_1.iloc[-5:].dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.iloc[-5:].dropna().median(axis=0,skipna=True).to_frame().T
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_last2 = model.predict(data1)
-                        team_2_data_last2 = model.predict(data2)
-                        if team_1_data_last2[0] > team_2_data_last2[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('last_5_games')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('last_5_games')
-                        print(f'Score prediction for {team_1} last 5 game: {team_1_data_last2[0]} points')
-                        print(f'Score prediction for {team_2} last 5 game: {team_2_data_last2[0]} points')
-                        print('====')
-                    data1 = final_data_1.iloc[-10:].dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.iloc[-10:].dropna().median(axis=0,skipna=True).to_frame().T
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_last3 = model.predict(data1)
-                        team_2_data_last3 = model.predict(data2)
-                        if team_1_data_last3[0] > team_2_data_last3[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('last_10_games')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('last_10_games')
-                        print(f'Score prediction for {team_1} last 10 game: {team_1_data_last3[0]} points')
-                        print(f'Score prediction for {team_2} last 10 game: {team_2_data_last3[0]} points')
-                        print('====')
-                    data1 = final_data_1.iloc[-15:].dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.iloc[-15:].dropna().median(axis=0,skipna=True).to_frame().T
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_last5 = model.predict(data1)
-                        team_2_data_last5 = model.predict(data2)
-                        if team_1_data_last5[0] > team_2_data_last5[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('last_15_games')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('last_15_games')
-                        print(f'Score prediction for {team_1} last 15 game: {team_1_data_last5[0]} points')
-                        print(f'Score prediction for {team_2} last 15 game: {team_2_data_last5[0]} points')
-                    data1 = final_data_1.iloc[-20:].dropna().median(axis=0,skipna=True).to_frame().T
-                    data2 = final_data_2.iloc[-20:].dropna().median(axis=0,skipna=True).to_frame().T
-                    if not data1.isnull().values.any() and not data1.isnull().values.any():
-                        team_1_data_last5 = model.predict(data1)
-                        team_2_data_last5 = model.predict(data2)
-                        if team_1_data_last5[0] > team_2_data_last5[0]:
-                            team_1_total += 1
-                            game_won_team_1.append('last_20_games')
-                        else:
-                            team_2_total += 1
-                            game_won_team_2.append('last_20_games')
-                        print(f'Score prediction for {team_1} last 20 game: {team_1_data_last5[0]} points')
-                        print(f'Score prediction for {team_2} last 20 game: {team_2_data_last5[0]} points')
-                    print(f'model used: {str(model)}')
-                    print('=Matchup win count=')
-                    print(f'{team_1} total: {team_1_total} : games won: {game_won_team_1}')
-                    print(f'{team_2} total: {team_2_total} : games won: {game_won_team_2}')
+                    vote_models = []
+                    for model in models:
+                        print('============================================================')
+                        
+                        # if team_1_loc == 'home':
+                        #     team_2_loc = 0
+                        #     team_1_loc = 1
+                        # elif team_1_loc == 'away':
+                        #     team_2_loc = 1
+                        #     team_1_loc = 0
+                        # data1['game_loc'] = team_1_loc
+                        # data2['game_loc'] = team_2_loc
+                        
+                        game_won_team_1 = []
+                        game_won_team_2 = []
+                        data1 = final_data_1.dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
+                        #MOVING AVERAGE ACROSS TWO SEASONS
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            data1 = final_data_1.rolling(10).mean()
+                            data2 = final_data_2.rolling(10).mean()
+                            data1 = data1.iloc[-1:]
+                            data2 = data2.iloc[-1:]
+                            print(data1)
+                            team_1_data_all = model.predict(data1)
+                            team_2_data_all = model.predict(data2)
+                            # if team_1_data_all[0] > team_2_data_all[0]:
+                            #     team_1_total += 1
+                            #     game_won_team_1.append('season')
+                            # else:
+                            #     team_2_total += 1
+                            #     game_won_team_2.append('season')
+                            print(f'Score prediction for {team_1} across 2022 and 2023 season FROM MOVING AVERAGE: {team_1_data_all[0]} points')
+                            print(f'Score prediction for {team_2} across 2022 and 2023 season FROM MOVING AVERAGE: {team_2_data_all[0]} points')
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_all = model.predict(data1)
+                            team_2_data_all = model.predict(data2)
+                            if team_1_data_all[0] > team_2_data_all[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('season')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('season')
+                            print(f'Score prediction for {team_1} across 2022 and 2023 season: {team_1_data_all[0]} points')
+                            print(f'Score prediction for {team_2} across 2022 and 2023 season: {team_2_data_all[0]} points')
+                            print('====')
+                        data1 = final_data_1.iloc[-1:].dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.iloc[-1:].dropna().median(axis=0,skipna=True).to_frame().T
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_last = model.predict(data1)
+                            team_2_data_last = model.predict(data2)
+                            if team_1_data_last[0] > team_2_data_last[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('last_game')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('last_game')
+                            print(f'Score prediction for {team_1} last game: {team_1_data_last[0]} points')
+                            print(f'Score prediction for {team_2} last game: {team_2_data_last[0]} points')
+                            print('====')
+                        data1 = final_data_1.iloc[-3:].dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.iloc[-3:].dropna().median(axis=0,skipna=True).to_frame().T
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_last = model.predict(data1)
+                            team_2_data_last = model.predict(data2)
+                            if team_1_data_last[0] > team_2_data_last[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('last_3_game')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('last_3_game')
+                            print(f'Score prediction for {team_1} last 3 games: {team_1_data_last[0]} points')
+                            print(f'Score prediction for {team_2} last 3 games: {team_2_data_last[0]} points')
+                            print('====')
+                        data1 = final_data_1.iloc[-5:].dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.iloc[-5:].dropna().median(axis=0,skipna=True).to_frame().T
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_last2 = model.predict(data1)
+                            team_2_data_last2 = model.predict(data2)
+                            if team_1_data_last2[0] > team_2_data_last2[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('last_5_games')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('last_5_games')
+                            print(f'Score prediction for {team_1} last 5 game: {team_1_data_last2[0]} points')
+                            print(f'Score prediction for {team_2} last 5 game: {team_2_data_last2[0]} points')
+                            print('====')
+                        data1 = final_data_1.iloc[-10:].dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.iloc[-10:].dropna().median(axis=0,skipna=True).to_frame().T
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_last3 = model.predict(data1)
+                            team_2_data_last3 = model.predict(data2)
+                            if team_1_data_last3[0] > team_2_data_last3[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('last_10_games')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('last_10_games')
+                            print(f'Score prediction for {team_1} last 10 game: {team_1_data_last3[0]} points')
+                            print(f'Score prediction for {team_2} last 10 game: {team_2_data_last3[0]} points')
+                            print('====')
+                        data1 = final_data_1.iloc[-15:].dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.iloc[-15:].dropna().median(axis=0,skipna=True).to_frame().T
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_last5 = model.predict(data1)
+                            team_2_data_last5 = model.predict(data2)
+                            if team_1_data_last5[0] > team_2_data_last5[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('last_15_games')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('last_15_games')
+                            print(f'Score prediction for {team_1} last 15 game: {team_1_data_last5[0]} points')
+                            print(f'Score prediction for {team_2} last 15 game: {team_2_data_last5[0]} points')
+                        data1 = final_data_1.iloc[-20:].dropna().median(axis=0,skipna=True).to_frame().T
+                        data2 = final_data_2.iloc[-20:].dropna().median(axis=0,skipna=True).to_frame().T
+                        if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            team_1_data_last5 = model.predict(data1)
+                            team_2_data_last5 = model.predict(data2)
+                            if team_1_data_last5[0] > team_2_data_last5[0]:
+                                team_1_total += 1
+                                game_won_team_1.append('last_20_games')
+                            else:
+                                team_2_total += 1
+                                game_won_team_2.append('last_20_games')
+                            print(f'Score prediction for {team_1} last 20 game: {team_1_data_last5[0]} points')
+                            print(f'Score prediction for {team_2} last 20 game: {team_2_data_last5[0]} points')
+                        print(f'model used: {str(model)}')
+                        print('=Matchup win count=')
+                        print(f'{team_1} total: {team_1_total} : games won: {game_won_team_1}')
+                        print(f'{team_2} total: {team_2_total} : games won: {game_won_team_2}')
+                        print('===============================================================')
+                        if game_won_team_1 > game_won_team_2:
+                            vote_models.append(team_1)
+                        elif game_won_team_1 < game_won_team_2:
+                            vote_models.append(team_2)
+                        # score_val_1 = model.predict(df_features_1)
+                        # score_val_2 = model.predict(df_features_2)
+                        #predict outcomes 
+                        if 'keras' in str(model):
+                            score_val_1 = model.predict(df_features_1) #model.predict_classes?
+                            score_val_2 = model.predict(df_features_2)
+                            y_classes_1 = score_val_1.argmax(axis=-1) 
+                            print(score_val_1)
+                            print(y_classes_1)
+                            print(f'Score prediction for {team_1}: {score_val_1}')
+                            print(f'score prediction for {team_2}: {score_val_2}')
+                            print('====')
+                    print(f'Vote returns {vote_models} as the winners')
                     print('===============================================================')
-                    # score_val_1 = model.predict(df_features_1)
-                    # score_val_2 = model.predict(df_features_2)
-                    #predict outcomes 
-                    if 'keras' in str(model):
-                        score_val_1 = model.predict(df_features_1) #model.predict_classes?
-                        score_val_2 = model.predict(df_features_2)
-                        y_classes_1 = score_val_1.argmax(axis=-1) 
-                        print(score_val_1)
-                        print(y_classes_1)
-                        print(f'Score prediction for {team_1}: {score_val_1}')
-                        print(f'score prediction for {team_2}: {score_val_2}')
-                        print('====')
-                    # else:
-                    #     score_val_1 = model.predict(df_features_1)
-                    #     score_val_2 = model.predict(df_features_2)
-                    # print(f'Score prediction for {team_1}: {score_val_1}')
-                    # print(f'score prediction for {team_2}: {score_val_2}')
+                        # else:
+                        #     score_val_1 = model.predict(df_features_1)
+                        #     score_val_2 = model.predict(df_features_2)
+                        # print(f'Score prediction for {team_1}: {score_val_1}')
+                        # print(f'score prediction for {team_2}: {score_val_2}')
                 except Exception as e:
                     print(f'Team not found: {e}')
     def feature_importances(self,model):
