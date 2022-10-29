@@ -30,6 +30,9 @@ from scipy import stats
 from tqdm import tqdm
 # from time import sleep
 from sklearn.neural_network import MLPRegressor
+"""
+TODO: tRY METHODS OF DETECTING OVERFITTING
+"""
 team_list = ['CHO','MIL','UTA','SAC','MEM','LAL',
              'MIA','IND','HOU','PHO','ATL','MIN',
              'SAS','BOS','CLE','GSW','WAS','POR',
