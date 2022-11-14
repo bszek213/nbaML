@@ -65,6 +65,7 @@ class nba_regressor():
                 self.year_store = year
                 for abv in tqdm(team_list):    
                     try:
+                        print() #tqdm things
                         print(f'current team: {abv}, year: {year}')
                         # https://www.basketball-reference.com/teams/BOS/2023/gamelog/
                         basic = 'https://www.basketball-reference.com/teams/' + abv + '/' + str(self.year_store) + '/gamelog/'

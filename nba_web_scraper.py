@@ -25,7 +25,7 @@ def html_to_df_web_scrape_NBA(URL,URL1,team,year):
             print('HTTPSConnectionPool(host="www.sports-reference.com", port=443): Max retries exceeded. Retry in 10 seconds')
             sleep(10)
     table = soup.find(id="all_tgl_basic")
-    table1 = soup.find(id="all_tgl_basic")
+    table1 = soup1.find(id="all_tgl_advanced")
     tbody = table.find('tbody')
     tbody1 = table1.find('tbody')
     tr_body = tbody.find_all('tr')
@@ -164,20 +164,6 @@ def html_to_df_web_scrape_NBA(URL,URL1,team,year):
     opp_tov_pct = []
     drb_pct = []
     opp_ft_rate = []
-    DataFrame(list(zip(game_result,pts,opp_pts,fg,fga,
-    fg_pct,fg3,fg3a,fg3_pct,ft,fta,ft_pct,orb,total_board,ast,
-    stl,blk,tov,pf,opp_fg,opp_fga,opp_fg_pct,opp_fg3,opp_fg3a,opp_fg3_pct,
-    opp_ft,opp_fta,opp_ft_pct,opp_orb,opp_trb,opp_ast,opp_stl,opp_blk,opp_tov,
-    opp_pf, off_rtg,def_rtg,pace,fta_per_fga_pct,fg3a_per_fga_pct,ts_pct,
-    trb_pct,ast_pct,stl_pct,blk_pct,efg_pct,tov_pct,orb_pct,ft_rate,opp_efg_pct,
-    opp_tov_pct,drb_pct,opp_ft_rate)),
-            columns =['game_result','pts','opp_pts','fg','fga',
-            'fg_pct','fg3','fg3a','fg3_pct','ft','fta','ft_pct','orb','total_board','ast',
-            'stl','blk','tov','pf','opp_fg','opp_fga','opp_fg_pct','opp_fg3','opp_fg3a','opp_fg3_pct',
-            'opp_ft','opp_fta','opp_ft_pct','opp_orb','opp_trb','opp_ast','opp_stl','opp_blk','opp_tov',
-            'opp_pf','off_rtg','def_rtg','pace','fta_per_fga_pct','fg3a_per_fga_pct','ts_pct',
-            'trb_pct','ast_pct','stl_pct','blk_pct','efg_pct','tov_pct','orb_pct','ft_rate','opp_efg_pct',
-            'opp_tov_pct','drb_pct','opp_ft_rate'])
     for trb in tr_body1:
         for td in trb.find_all('td'):
             if td.get('data-stat') == "off_rtg":
@@ -218,4 +204,17 @@ def html_to_df_web_scrape_NBA(URL,URL1,team,year):
                 opp_ft_rate.append(td.get_text())
             
             
-    return 
+    return DataFrame(list(zip(game_result,pts,opp_pts,fg,fga,
+    fg_pct,fg3,fg3a,fg3_pct,ft,fta,ft_pct,orb,total_board,ast,
+    stl,blk,tov,pf,opp_fg,opp_fga,opp_fg_pct,opp_fg3,opp_fg3a,opp_fg3_pct,
+    opp_ft,opp_fta,opp_ft_pct,opp_orb,opp_trb,opp_ast,opp_stl,opp_blk,opp_tov,
+    opp_pf, off_rtg,def_rtg,pace,fta_per_fga_pct,fg3a_per_fga_pct,ts_pct,
+    trb_pct,ast_pct,stl_pct,blk_pct,efg_pct,tov_pct,orb_pct,ft_rate,opp_efg_pct,
+    opp_tov_pct,drb_pct,opp_ft_rate)),
+            columns =['game_result','pts','opp_pts','fg','fga',
+            'fg_pct','fg3','fg3a','fg3_pct','ft','fta','ft_pct','orb','total_board','ast',
+            'stl','blk','tov','pf','opp_fg','opp_fga','opp_fg_pct','opp_fg3','opp_fg3a','opp_fg3_pct',
+            'opp_ft','opp_fta','opp_ft_pct','opp_orb','opp_trb','opp_ast','opp_stl','opp_blk','opp_tov',
+            'opp_pf','off_rtg','def_rtg','pace','fta_per_fga_pct','fg3a_per_fga_pct','ts_pct',
+            'trb_pct','ast_pct','stl_pct','blk_pct','efg_pct','tov_pct','orb_pct','ft_rate','opp_efg_pct',
+            'opp_tov_pct','drb_pct','opp_ft_rate'])
