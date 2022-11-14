@@ -17,7 +17,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
 # from scipy.stats import uniform
-from os import getcwd, mkdir
+from os import getcwd#, mkdir
 from os.path import join, exists
 # from scipy import stats
 import yaml
@@ -28,7 +28,7 @@ from eli5 import show_weights
 import sys
 from scipy import stats
 from tqdm import tqdm
-# from time import sleep
+from time import sleep
 from sklearn.neural_network import MLPRegressor
 team_list = ['CHO','MIL','UTA','SAC','MEM','LAL',
              'MIA','IND','HOU','PHO','ATL','MIN',
@@ -47,7 +47,7 @@ class nba_regressor():
                 self.hyper_param_dict = yaml.load(file, Loader=yaml.FullLoader)
     def get_teams(self):
         year_list_find = []
-        year_list = [2023,2022,2021,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010]#2023,,2009,2008,2007,2006,2005,2004,2003,2002,2001,2000]
+        year_list = [2023,2022,2021,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010]
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)
@@ -67,11 +67,13 @@ class nba_regressor():
                     try:
                         print(f'current team: {abv}, year: {year}')
                         # https://www.basketball-reference.com/teams/BOS/2023/gamelog/
-                        str_combine = 'https://www.basketball-reference.com/teams/' + abv + '/' + str(self.year_store) + '/gamelog/'
-                        df_inst = html_to_df_web_scrape_NBA(str_combine,abv,self.year_store)
+                        basic = 'https://www.basketball-reference.com/teams/' + abv + '/' + str(self.year_store) + '/gamelog/'
+                        adv = 'https://www.basketball-reference.com/teams/' + abv + '/' + str(self.year_store) + '/gamelog-advanced/'
+                        df_inst = html_to_df_web_scrape_NBA(basic,adv,abv,self.year_store)
                         final_list.append(df_inst)
                     except:
                         print(f'{abv} data are not available')
+                    sleep(5) #I get get banned for a small period of time if I do not do this  
                 final_data = pd.concat(final_list)
                 if exists(join(getcwd(),'all_data_regressor.csv')):
                     self.all_data = pd.read_csv(join(getcwd(),'all_data_regressor.csv'))  
