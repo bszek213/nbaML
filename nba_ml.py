@@ -30,6 +30,9 @@ from scipy import stats
 from tqdm import tqdm
 from time import sleep
 from sklearn.neural_network import MLPRegressor
+"""
+TODO: REMOVE game_result as a feature... it does not make sense
+"""
 team_list = ['CHO','MIL','UTA','SAC','MEM','LAL',
              'MIA','IND','HOU','PHO','ATL','MIN',
              'SAS','BOS','CLE','GSW','WAS','POR',
@@ -103,6 +106,7 @@ class nba_regressor():
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
         to_drop = [column for column in upper.columns if any(upper[column] >= 0.8)]
         self.drop_cols = to_drop
+        self.drop_cols.append('game_result') #poor interpretation in regression problems
         self.x_no_corr = self.x.drop(columns=to_drop)
         cols = self.x_no_corr.columns
         print(f'Columns dropped: {self.drop_cols}')
@@ -135,8 +139,9 @@ class nba_regressor():
             self.prob_plots(col_name)
         #plot heat map
         top_corr_features = corr_matrix.index
-        plt.figure(figsize=(20,20))
+        plt.figure(figsize=(30,30))
         sns.heatmap(corr_matrix[top_corr_features],annot=True,cmap="RdYlGn")
+        plt.tight_layout()
         plt.savefig('correlations.png',dpi=350)
         plt.close()
     def prob_plots(self,col_name):
@@ -163,20 +168,20 @@ class nba_regressor():
                                refit='neg_root_mean_squared_error',verbose=4, n_jobs=-1)
             search_rand = clf_rand.fit(self.x_train,self.y_train)
             #MULTI-LAYER PERCEPTRON
-            MLPClass = MLPRegressor()
-            MLP_perm = {
-                'activation':['identity','relu','tanh'],
-                'solver' : ['lbfgs', 'sgd', 'adam'],
-                'learning_rate' : ['constant', 'invscaling', 'adaptive'],
-                'learning_rate_init' : np.arange(0.001, 0.005, 0.001, dtype=float),
-                'max_iter': range(100,1000,200),
-                # 'tol': np.arange(0.001, 0.005, 0.001, dtype=float)
-                }
-            clf_MLP = GridSearchCV(MLPClass, MLP_perm, scoring=['neg_root_mean_squared_error'],
-                               refit='neg_root_mean_squared_error', verbose=4, n_jobs=-1)
-            search_MLP= clf_MLP.fit(self.x_train,self.y_train)
+            # MLPClass = MLPRegressor()
+            # MLP_perm = {
+            #     'activation':['identity','relu','tanh'],
+            #     'solver' : ['lbfgs', 'sgd', 'adam'],
+            #     'learning_rate' : ['constant', 'invscaling', 'adaptive'],
+            #     'learning_rate_init' : np.arange(0.001, 0.01, 0.01, dtype=float),
+            #     'max_iter': range(100,1000,200),
+            #     # 'tol': np.arange(0.001, 0.005, 0.001, dtype=float)
+            #     }
+            # clf_MLP = GridSearchCV(MLPClass, MLP_perm, scoring=['neg_root_mean_squared_error'],
+            #                    refit='neg_root_mean_squared_error', verbose=4, n_jobs=-1)
+            # search_MLP= clf_MLP.fit(self.x_train,self.y_train)
             print('RandomForestRegressor - best params: ',search_rand.best_params_)
-            print('MultiLayerPerceptron - best params: ',search_MLP.best_params_)
+            # print('MultiLayerPerceptron - best params: ',search_MLP.best_params_)
             return 'no model'
         else:
             print('fit to model that has been tuned')
@@ -184,34 +189,34 @@ class nba_regressor():
             RandForclass = RandomForestRegressor(
                 criterion='squared_error',
                 max_features='sqrt', 
-                min_samples_split=2, 
+                min_samples_split=3, 
                 n_estimators=406
                 ).fit(self.x_train,self.y_train)
             RandForclass_err = r2_score(self.y_test, RandForclass.predict(self.x_test))
             RAND_rmse = np.sqrt(mean_squared_error(self.y_test, RandForclass.predict(self.x_test)))
             #MULTILAYER PERCEPTRON
-            MLPClass = MLPRegressor(
-                activation='identity',
-                learning_rate='constant',
-                learning_rate_init=0.001,
-                max_iter=900,
-                solver='lbfgs'
-                )
-            ADA_with_MLP = AdaBoostRegressor(base_estimator=MLPClass,random_state=0, n_estimators=100).fit(self.x_train,self.y_train)
-            MLP_err = r2_score(self.y_test, ADA_with_MLP.predict(self.x_test))
-            MLP_rmse = np.sqrt(mean_squared_error(self.y_test, ADA_with_MLP.predict(self.x_test)))
+            # MLPClass = MLPRegressor(
+            #     activation='identity',
+            #     learning_rate='adaptive',
+            #     learning_rate_init=0.004,
+            #     max_iter=900,
+            #     solver='lbfgs'
+            #     )
+            # ADA_with_MLP = AdaBoostRegressor(base_estimator=MLPClass,random_state=0, n_estimators=100).fit(self.x_train,self.y_train)
+            # MLP_err = r2_score(self.y_test, ADA_with_MLP.predict(self.x_test))
+            # MLP_rmse = np.sqrt(mean_squared_error(self.y_test, ADA_with_MLP.predict(self.x_test)))
             #LINEAR REGRESSION
             LinReg = LinearRegression()
             linClass = LinReg.fit(self.x_train,self.y_train)
             Line_err = r2_score(self.y_test, linClass.predict(self.x_test))
             Line_rmse = np.sqrt(mean_squared_error(self.y_test, linClass.predict(self.x_test)))
-            print('Adaboost with MultiLayerPerceptron rmse',MLP_rmse)
-            print('Adaboost with MultiLayerPerceptron accuracy',MLP_err)
+            # print('Adaboost with MultiLayerPerceptron rmse',MLP_rmse)
+            # print('Adaboost with MultiLayerPerceptron accuracy',MLP_err)
             print('RandomForestRegressor rmse',RAND_rmse)
             print('RandomForestRegressor accuracy',RandForclass_err)
             print('LinearRegression rmse',Line_rmse)
             print('LinearRegression accuracy',Line_err)
-            return [RandForclass,ADA_with_MLP,LinReg]
+            return [RandForclass,LinReg]
     def predict_two_teams(self,models):
         while True:
                 print(f'list of teams: {sorted(team_list)}')
@@ -226,15 +231,19 @@ class nba_regressor():
                     year = 2022
                     #2021
                     team_1_url = 'https://www.basketball-reference.com/teams/' + team_1.upper() + '/' + str(year) + '/gamelog/'
+                    team_1_url_adv = 'https://www.basketball-reference.com/teams/' + team_1.upper() + '/' + str(year) + '/gamelog-advanced/'
                     team_2_url = 'https://www.basketball-reference.com/teams/' + team_2.upper() + '/' + str(year) + '/gamelog/'
-                    team_1_df2022 = html_to_df_web_scrape_NBA(team_1_url,team_1,year)
-                    team_2_df2022 = html_to_df_web_scrape_NBA(team_2_url,team_2,year)
+                    team_2_url_adv = 'https://www.basketball-reference.com/teams/' + team_2.upper() + '/' + str(year) + '/gamelog-advanced/'
+                    team_1_df2022 = html_to_df_web_scrape_NBA(team_1_url,team_1_url_adv,team_1,year)
+                    team_2_df2022 = html_to_df_web_scrape_NBA(team_2_url,team_2_url_adv,team_2,year)
                     #2022
                     year = 2023
                     team_1_url = 'https://www.basketball-reference.com/teams/' + team_1.upper() + '/' + str(year) + '/gamelog/'
+                    team_1_url_adv = 'https://www.basketball-reference.com/teams/' + team_1.upper() + '/' + str(year) + '/gamelog-advanced/'
                     team_2_url = 'https://www.basketball-reference.com/teams/' + team_2.upper() + '/' + str(year) + '/gamelog/'
-                    team_1_df2023= html_to_df_web_scrape_NBA(team_1_url,team_1,year)
-                    team_2_df2023 = html_to_df_web_scrape_NBA(team_2_url,team_2,year)
+                    team_2_url_adv = 'https://www.basketball-reference.com/teams/' + team_2.upper() + '/' + str(year) + '/gamelog-advanced/'
+                    team_1_df2023= html_to_df_web_scrape_NBA(team_1_url,team_1_url_adv,team_1,year)
+                    team_2_df2023 = html_to_df_web_scrape_NBA(team_2_url,team_2_url_adv,team_2,year)
                     #concatenate 2021 and 2022
                     final_data_1 = pd.concat([team_1_df2022, team_1_df2023])
                     final_data_2 = pd.concat([team_2_df2022, team_2_df2023])
@@ -277,10 +286,11 @@ class nba_regressor():
                     #create data for prediction
                     df_features_1 = final_data_1.dropna().median(axis=0,skipna=True).to_frame().T
                     df_features_2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
-                    team_1_total = 0
-                    team_2_total = 0
                     vote_models = []
+                    save_rolling_out = []
                     for model in models:
+                        team_1_total = 0
+                        team_2_total = 0
                         print('============================================================')
                         
                         # if team_1_loc == 'home':
@@ -298,21 +308,47 @@ class nba_regressor():
                         data2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
                         #MOVING AVERAGE ACROSS TWO SEASONS
                         if not data1.isnull().values.any() and not data1.isnull().values.any():
-                            data1 = final_data_1.rolling(10).mean()
-                            data2 = final_data_2.rolling(10).mean()
-                            data1 = data1.iloc[-1:]
-                            data2 = data2.iloc[-1:]
-                            print(data1)
-                            team_1_data_all = model.predict(data1)
-                            team_2_data_all = model.predict(data2)
+                            data1_long = final_data_1.dropna().rolling(20).mean() #long
+                            data2_long = final_data_2.dropna().rolling(20).mean()
+                            data1_long = data1_long.iloc[-1:]
+                            data2_long = data2_long.iloc[-1:]
+                            data1_short = final_data_1.dropna().rolling(5).mean() #short
+                            data2_short= final_data_2.dropna().rolling(5).mean()
+                            data1_short = data1_short.iloc[-1:]
+                            data2_short = data2_short.iloc[-1:]
+                            data1_med = final_data_1.dropna().rolling(10).mean() #medium
+                            data2_med= final_data_2.dropna().rolling(10).mean()
+                            data1_med = data1_med.iloc[-1:]
+                            data2_med = data2_med.iloc[-1:]
+
+                            team_1_data_long_avg = model.predict(data1_long)
+                            team_2_data_long_avg = model.predict(data2_long)
+                            team_1_data_short_avg = model.predict(data1_short)
+                            team_2_data_short_avg = model.predict(data2_short)
+                            team_1_data_med_avg = model.predict(data1_med)
+                            team_2_data_med_avg = model.predict(data2_med)
+                            vote_running_avg = []
+                            if team_1_data_long_avg[0] > team_2_data_long_avg[0]:
+                                vote_running_avg.append(team_1)
+                            else:
+                                vote_running_avg.append(team_2)
+                            if team_1_data_short_avg[0] > team_2_data_short_avg[0]:
+                                vote_running_avg.append(team_1)
+                            else:
+                                vote_running_avg.append(team_2)
+                            if team_1_data_med_avg[0] > team_2_data_med_avg[0]:
+                                vote_running_avg.append(team_1)
+                            else:
+                                vote_running_avg.append(team_2)
+                            save_rolling_out.append(vote_running_avg)
+                            # team_1_data_all = model.predict(data1)
+                            # team_2_data_all = model.predict(data2)
                             # if team_1_data_all[0] > team_2_data_all[0]:
                             #     team_1_total += 1
                             #     game_won_team_1.append('season')
                             # else:
                             #     team_2_total += 1
                             #     game_won_team_2.append('season')
-                            print(f'Score prediction for {team_1} across 2022 and 2023 season FROM MOVING AVERAGE: {team_1_data_all[0]} points')
-                            print(f'Score prediction for {team_2} across 2022 and 2023 season FROM MOVING AVERAGE: {team_2_data_all[0]} points')
                         if not data1.isnull().values.any() and not data1.isnull().values.any():
                             team_1_data_all = model.predict(data1)
                             team_2_data_all = model.predict(data2)
@@ -412,23 +448,27 @@ class nba_regressor():
                         print(f'{team_1} total: {team_1_total} : games won: {game_won_team_1}')
                         print(f'{team_2} total: {team_2_total} : games won: {game_won_team_2}')
                         print('===============================================================')
-                        if game_won_team_1 > game_won_team_2:
+                        if team_1_total > team_2_total:
                             vote_models.append(team_1)
-                        elif game_won_team_1 < game_won_team_2:
+                        elif team_1_total < team_2_total:
                             vote_models.append(team_2)
                         # score_val_1 = model.predict(df_features_1)
                         # score_val_2 = model.predict(df_features_2)
                         #predict outcomes 
-                        if 'keras' in str(model):
-                            score_val_1 = model.predict(df_features_1) #model.predict_classes?
-                            score_val_2 = model.predict(df_features_2)
-                            y_classes_1 = score_val_1.argmax(axis=-1) 
-                            print(score_val_1)
-                            print(y_classes_1)
-                            print(f'Score prediction for {team_1}: {score_val_1}')
-                            print(f'score prediction for {team_2}: {score_val_2}')
-                            print('====')
+                        # if 'keras' in str(model):
+                        #     score_val_1 = model.predict(df_features_1) #model.predict_classes?
+                        #     score_val_2 = model.predict(df_features_2)
+                        #     y_classes_1 = score_val_1.argmax(axis=-1) 
+                        #     print(score_val_1)
+                        #     print(y_classes_1)
+                        #     print(f'Score prediction for {team_1}: {score_val_1}')
+                        #     print(f'score prediction for {team_2}: {score_val_2}')
+                        #     print('====')
                     print(f'Vote returns {vote_models} as the winners')
+                    print('===============================================================')
+                    print(f'models: {models}')
+                    print('all predictions from both models with a short, medium, and long running average')
+                    print(save_rolling_out)
                     print('===============================================================')
                         # else:
                         #     score_val_1 = model.predict(df_features_1)
