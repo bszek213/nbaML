@@ -31,7 +31,7 @@ from tqdm import tqdm
 from time import sleep
 from sklearn.neural_network import MLPRegressor
 """
-TODO: REMOVE game_result as a feature... it does not make sense
+TODO: Scale data, right now you are not and that may be leading to overfitting issues
 """
 team_list = ['CHO','MIL','UTA','SAC','MEM','LAL',
              'MIA','IND','HOU','PHO','ATL','MIN',
@@ -153,6 +153,7 @@ class nba_regressor():
         save_name = 'probplot_' + col_name + '.png'
         plt.tight_layout()
         plt.savefig(join(getcwd(), 'prob_plots_regress',save_name), dpi=300)
+        plt.close()
     def machine(self):
         if sys.argv[1] == 'tune':
             #RANDOM FOREST
@@ -308,19 +309,31 @@ class nba_regressor():
                         data2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
                         #MOVING AVERAGE ACROSS TWO SEASONS
                         if not data1.isnull().values.any() and not data1.isnull().values.any():
+                            # plt.figure()
                             data1_long = final_data_1.dropna().rolling(20).mean() #long
+                            # plt.plot(data1_long['pace'].values)
                             data2_long = final_data_2.dropna().rolling(20).mean()
                             data1_long = data1_long.iloc[-1:]
+                            # print(data1_long['off_rtg'].values)
                             data2_long = data2_long.iloc[-1:]
                             data1_short = final_data_1.dropna().rolling(5).mean() #short
+                            # plt.plot(data1_short['pace'].values)
                             data2_short= final_data_2.dropna().rolling(5).mean()
                             data1_short = data1_short.iloc[-1:]
+                            # print(data1_short['off_rtg'].values)
                             data2_short = data2_short.iloc[-1:]
                             data1_med = final_data_1.dropna().rolling(10).mean() #medium
-                            data2_med= final_data_2.dropna().rolling(10).mean()
+                            # plt.plot(data1_med['pace'].values)
+                            # plt.legend(['Long','Short','Medium'])
+                            data2_med = final_data_2.dropna().rolling(10).mean()
                             data1_med = data1_med.iloc[-1:]
+                            # print(data1_med['off_rtg'].values)
                             data2_med = data2_med.iloc[-1:]
-
+                            # plt.grid()
+                            # title_name = f'PACE for {team_1}'
+                            # plt.ylabel('Pace')
+                            # plt.title(title_name)
+                            
                             team_1_data_long_avg = model.predict(data1_long)
                             team_2_data_long_avg = model.predict(data2_long)
                             team_1_data_short_avg = model.predict(data1_short)
@@ -470,6 +483,7 @@ class nba_regressor():
                     print('all predictions from both models with a short, medium, and long running average')
                     print(save_rolling_out)
                     print('===============================================================')
+                    plt.show()
                         # else:
                         #     score_val_1 = model.predict(df_features_1)
                         #     score_val_2 = model.predict(df_features_2)
