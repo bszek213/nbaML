@@ -15,7 +15,7 @@ from sklearn.metrics import r2_score, mean_squared_error #explained_variance_sco
 import time
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
+from sklearn.ensemble import RandomForestRegressor#, AdaBoostRegressor
 # from scipy.stats import uniform
 from os import getcwd#, mkdir
 from os.path import join, exists
@@ -29,9 +29,11 @@ import sys
 from scipy import stats
 from tqdm import tqdm
 from time import sleep
-from sklearn.neural_network import MLPRegressor
+# from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import MinMaxScaler
 """
 TODO: Scale data, right now you are not and that may be leading to overfitting issues
+need to finish this, so add inverse_transform() function and scale the prediction data
 """
 team_list = ['CHO','MIL','UTA','SAC','MEM','LAL',
              'MIA','IND','HOU','PHO','ATL','MIN',
@@ -131,22 +133,30 @@ class nba_regressor():
 
         #split data into train and test
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_no_corr, self.y, train_size=0.8)
+        #Scale data - minmaxscaler
+        x_train_scale = MinMaxScaler()
+        x_test_scale = MinMaxScaler()
+        self.x_train_scaled = x_train_scale.fit_transform(self.x_train)
+        self.x_test_scaled = x_test_scale.fit_transform(self.x_test)
         cols = self.x_train.columns.to_list()
         self.x_train_cols = self.x_train.columns.to_list()
         self.y_train_cols = self.y_train.name
-        for col_name in cols:
-            # self.x_train[col_name], _ = stats.boxcox(self.x_train[col_name])
-            self.prob_plots(col_name)
+        self.x_train = pd.DataFrame(self.x_train_scaled,columns=[self.x_train_cols])
+        self.x_test = pd.DataFrame(self.x_test_scaled,columns=[self.x_train_cols])
+        #TODO: FIx error with prob plots
+        # for col_name in cols:
+        #     self.prob_plots(col_name)
         #plot heat map
         top_corr_features = corr_matrix.index
         plt.figure(figsize=(30,30))
-        sns.heatmap(corr_matrix[top_corr_features],annot=True,cmap="RdYlGn")
+        sns.heatmap(corr_matrix[top_corr_features],annot=True,cmap="RdYlGn")    
         plt.tight_layout()
         plt.savefig('correlations.png',dpi=350)
         plt.close()
     def prob_plots(self,col_name):
         fig = plt.figure()
         ax1 = fig.add_subplot(111)
+        #TODO: FIx error with prob plots
         prob = stats.probplot(self.x_train[col_name], dist=stats.norm, plot=ax1)
         title = f'probPlot of training data against normal distribution, feature: {col_name}'  
         ax1.set_title(title,fontsize=10)
