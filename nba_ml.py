@@ -32,6 +32,7 @@ from time import sleep
 # from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
+from boruta import BorutaPy
 """
 TODO: Scale data, right now you are not and that may be leading to overfitting issues
 need to finish this, so add inverse_transform() function and scale the prediction data
@@ -109,20 +110,21 @@ class nba_regressor():
         # Find features with correlation greater than 0.90
         corr_matrix = np.abs(self.x.astype(float).corr())
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
-        to_drop = [column for column in upper.columns if any(upper[column] >= 0.8)]
-        self.drop_cols = to_drop
-        self.drop_cols.append('game_result') #poor interpretation in regression problems
-        self.x_no_corr = self.x.drop(columns=to_drop)
+        # to_drop = [column for column in upper.columns if any(upper[column] >= 0.8)]
+        # self.drop_cols = to_drop
+        # self.drop_cols = []
+        # self.drop_cols.append('game_result') #poor interpretation in regression problems
+        self.x_no_corr = self.x#.drop(columns=to_drop)
         cols = self.x_no_corr.columns
-        print(f'Columns dropped: {self.drop_cols}')
+        # print(f'Columns dropped: {self.drop_cols}')
         #Remove outliers with 1.5 +/- IQR
         print(f'old feature dataframe shape before outlier removal: {self.x_no_corr.shape}')
         for col_name in cols:
             Q1 = np.percentile(self.x_no_corr[col_name], 25)
             Q3 = np.percentile(self.x_no_corr[col_name], 75)
             IQR = Q3 - Q1
-            upper = np.where(self.x_no_corr[col_name] >= (Q3+2.0*IQR)) #1.5 is the standard, use two to see if more data helps improve model performance
-            lower = np.where(self.x_no_corr[col_name] <= (Q1-2.0*IQR)) 
+            upper = np.where(self.x_no_corr[col_name] >= (Q3+3.0*IQR)) #1.5 is the standard, use two to see if more data helps improve model performance
+            lower = np.where(self.x_no_corr[col_name] <= (Q1-3.0*IQR)) 
             self.x_no_corr.drop(upper[0], inplace = True)
             self.x_no_corr.drop(lower[0], inplace = True)
             self.y.drop(upper[0], inplace = True)
@@ -204,7 +206,28 @@ class nba_regressor():
                 max_features='sqrt', 
                 min_samples_split=3, 
                 n_estimators=406
-                ).fit(self.x_train,self.y_train)
+                )#.fit(self.x_train,self.y_train)
+            feat_selector = BorutaPy(
+                verbose=2,
+                estimator=RandForclass,
+                n_estimators='auto',
+                max_iter=10  # number of iterations to perform
+            )
+            feat_selector.fit(np.array(self.x_train),np.array(self.y_train))
+            print(feat_selector.support_)
+            print("Ranking and support for all features")
+            self.drop_cols_boruta = []
+            for i in range(len(feat_selector.support_)):
+                if feat_selector.support_[i]:
+                    print(f'Save feature: {self.x_train.columns[i][0]}')
+                else:
+                    print(f'Drop feature: {self.x_train.columns[i][0]}')
+                    self.drop_cols_boruta.append(self.x_train.columns[i][0])
+            self.drop_cols_boruta.append('game_result')
+            print(f'Features to drop based on Boruta algorithm: {self.drop_cols_boruta}')
+            self.x_train.drop(columns=self.drop_cols_boruta, inplace=True)
+            self.x_test.drop(columns=self.drop_cols_boruta, inplace=True)
+            RandForclass.fit(self.x_train,self.y_train)
             RAND_rmse = mean_squared_error(self.y_test, RandForclass.predict(self.x_test),squared=False)
             #MULTILAYER PERCEPTRON
             # MLPClass = MLPRegressor(
@@ -287,17 +310,18 @@ class nba_regressor():
                     #     final_data_2 = final_data_2.drop(columns=['Unnamed: 0'])
                     
                     #drop cols
-                    final_data_1.drop(columns=self.drop_cols, inplace=True)
-                    final_data_2.drop(columns=self.drop_cols, inplace=True)
+                    final_data_1.drop(columns=self.drop_cols_boruta, inplace=True)
+                    final_data_2.drop(columns=self.drop_cols_boruta, inplace=True)
                     final_data_1.drop(columns=['pts'], inplace=True)
                     final_data_2.drop(columns=['pts'], inplace=True)
                     #dropnans
                     final_data_1.dropna(inplace=True)
                     final_data_2.dropna(inplace=True)
                     #minMaxScale data
+                    inst = MinMaxScaler()
                     cols = final_data_1.columns.to_list()
-                    final_data_1 = self.x_scaler.transform(final_data_1)
-                    final_data_2 = self.x_scaler.transform(final_data_2)
+                    final_data_1 = inst.fit_transform(final_data_1)
+                    final_data_2 = inst.transform(final_data_2)
                     final_data_1 = pd.DataFrame(final_data_1,columns=[cols])
                     final_data_2 = pd.DataFrame(final_data_2,columns=[cols])
                     #create data for prediction
@@ -307,52 +331,89 @@ class nba_regressor():
                     data1 = final_data_1.dropna().median(axis=0,skipna=True).to_frame().T
                     data2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
                     if not data1.isnull().values.any() and not data2.isnull().values.any():
+                        #Try to find the moving averages that work
+                        ma_range = np.arange(2,30,1)
+                        #USE THIS AFTER GAMES ARE OVER TO FIGURE OUT WHICH RANGES ARE BEST
+                        # team_won = input('who won: ')
+                        # correct_ranges = []
+                        # for ma in tqdm(ma_range):
+                        #     data1 = final_data_1.dropna().rolling(ma).mean()
+                        #     data2 = final_data_2.dropna().rolling(ma).mean()
+                        #     team_1_predict = model.predict(data1.iloc[-1:])
+                        #     team_2_predict = model.predict(data2.iloc[-1:])
+                        #     if team_1_predict < team_2_predict:
+                        #         if team_won == team_2:
+                        #             correct_ranges.append(ma)
+                        #             print(f'{ma} is correct')
+                        #     if team_1_predict > team_2_predict:
+                        #         if team_won == team_1:
+                        #             correct_ranges.append(ma)
+                        #             print(f'{ma} is correct')
+                        # print(f'correct ranges: {correct_ranges}')
                         # plt.figure()
-                        short = 5
-                        medium = 10
-                        long = 20
-                        data1_long = final_data_1.dropna().rolling(long).mean() #long
-                        # plt.plot(data1_long['pace'].values)
-                        data2_long = final_data_2.dropna().rolling(long).mean()
-                        data1_long = data1_long.iloc[-1:]
-                        # print(data1_long['off_rtg'].values)
-                        data2_long = data2_long.iloc[-1:]
-                        data1_short = final_data_1.dropna().rolling(short).mean() #short
-                        # plt.plot(data1_short['pace'].values)
-                        data2_short= final_data_2.dropna().rolling(short).mean()
-                        data1_short = data1_short.iloc[-1:]
-                        # print(data1_short['off_rtg'].values)
-                        data2_short = data2_short.iloc[-1:]
-                        data1_med = final_data_1.dropna().rolling(medium).mean() #medium
-                        # plt.plot(data1_med['pace'].values)
-                        # plt.legend(['Long','Short','Medium'])
-                        data2_med = final_data_2.dropna().rolling(medium).mean()
-                        data1_med = data1_med.iloc[-1:]
-                        # print(data1_med['off_rtg'].values)
-                        data2_med = data2_med.iloc[-1:]
-                        #Predictions based on running means
-                        team_1_data_long_avg = model.predict(data1_long)
-                        team_2_data_long_avg = model.predict(data2_long)
-                        team_1_data_short_avg = model.predict(data1_short)
-                        team_2_data_short_avg = model.predict(data2_short)
-                        team_1_data_med_avg = model.predict(data1_med)
-                        team_2_data_med_avg = model.predict(data2_med)
-                        vote_running_avg = []
-                        if team_1_data_short_avg[0] > team_2_data_short_avg[0]:
-                            vote_running_avg.append(team_1)
-                        else:
-                            vote_running_avg.append(team_2)
-                        if team_1_data_med_avg[0] > team_2_data_med_avg[0]:
-                            vote_running_avg.append(team_1)
-                        else:
-                            vote_running_avg.append(team_2)
-                        if team_1_data_long_avg[0] > team_2_data_long_avg[0]:
-                            vote_running_avg.append(team_1)
-                        else:
-                            vote_running_avg.append(team_2)
+                        team_1_count = 0
+                        team_1_ma = []
+                        team_2_count = 0
+                        team_2_ma = []
+                        for ma in tqdm(ma_range):
+                            data1 = final_data_1.dropna().rolling(ma).mean()
+                            data2 = final_data_2.dropna().rolling(ma).mean()
+                            team_1_predict = model.predict(data1.iloc[-1:])
+                            team_2_predict = model.predict(data2.iloc[-1:])
+                            if team_1_predict > team_2_predict:
+                                team_1_count += 1
+                                team_1_ma.append(ma)
+                            if team_1_predict < team_2_predict:
+                                team_2_count += 1
+                                team_2_ma.append(ma)
+                        # short = 2
+                        # medium = 12
+                        # long = 20
+                        # data1_long = final_data_1.dropna().rolling(long).mean() #long
+                        # # plt.plot(data1_long['pace'].values)
+                        # data2_long = final_data_2.dropna().rolling(long).mean()
+                        # data1_long = data1_long.iloc[-1:]
+                        # # print(data1_long['off_rtg'].values)
+                        # data2_long = data2_long.iloc[-1:]
+                        # data1_short = final_data_1.dropna().rolling(short).mean() #short
+                        # # plt.plot(data1_short['pace'].values)
+                        # data2_short= final_data_2.dropna().rolling(short).mean()
+                        # data1_short = data1_short.iloc[-1:]
+                        # # print(data1_short['off_rtg'].values)
+                        # data2_short = data2_short.iloc[-1:]
+                        # data1_med = final_data_1.dropna().rolling(medium).mean() #medium
+                        # # plt.plot(data1_med['pace'].values)
+                        # # plt.legend(['Long','Short','Medium'])
+                        # data2_med = final_data_2.dropna().rolling(medium).mean()
+                        # data1_med = data1_med.iloc[-1:]
+                        # # print(data1_med['off_rtg'].values)
+                        # data2_med = data2_med.iloc[-1:]
+                        # #Predictions based on running means
+                        # team_1_data_long_avg = model.predict(data1_long)
+                        # team_2_data_long_avg = model.predict(data2_long)
+                        # team_1_data_short_avg = model.predict(data1_short)
+                        # team_2_data_short_avg = model.predict(data2_short)
+                        # team_1_data_med_avg = model.predict(data1_med)
+                        # team_2_data_med_avg = model.predict(data2_med)
+                        # vote_running_avg = []
+                        # if team_1_data_short_avg[0] > team_2_data_short_avg[0]:
+                        #     vote_running_avg.append(team_1)
+                        # else:
+                        #     vote_running_avg.append(team_2)
+                        # if team_1_data_med_avg[0] > team_2_data_med_avg[0]:
+                        #     vote_running_avg.append(team_1)
+                        # else:
+                        #     vote_running_avg.append(team_2)
+                        # if team_1_data_long_avg[0] > team_2_data_long_avg[0]:
+                        #     vote_running_avg.append(team_1)
+                        # else:
+                        #     vote_running_avg.append(team_2)
                         print('===============================================================')
-                        print(f'all predictions from both models with a short ({short} game rolling mean), medium ({medium} game rolling mean), and long running average ({long} game rolling mean)')
-                        print(vote_running_avg)
+                        # print(f'all predictions from both models with a short ({short} game rolling mean), medium ({medium} game rolling mean), and long running average ({long} game rolling mean)')
+                        # print(vote_running_avg)
+                        print(f'Rolling averages with a rolling average from 2-30 games')
+                        print(f'{team_1}: {team_1_count} | {team_1_ma}')
+                        print(f'{team_2}: {team_2_count} | {team_2_ma}')
                         print('===============================================================')
                         #PLOT PCA FOR VISUALIZATION
                         pca_1 = PCA(n_components=2).fit(final_data_1)
@@ -361,12 +422,12 @@ class nba_regressor():
                         pca_2 = PCA(n_components=2).fit(final_data_2)
                         plot_data2 = pca_2.transform(final_data_2)
                         print(pca_2.explained_variance_ratio_)
-                        fig = plt.figure()
-                        ax = plt.axes(projection='3d')
-                        ax.plot3D(np.arange(0,len(plot_data1[:,0]),1),plot_data1[:,0], plot_data1[:,1], 'green',label=team_1)
-                        ax.plot3D(np.arange(0,len(plot_data2[:,0]),1),plot_data2[:,0], plot_data2[:,1], 'blue',label=team_2)
-                        plt.legend()
-                        plt.show()
+                        # fig = plt.figure()
+                        # ax = plt.axes(projection='3d')
+                        # ax.plot3D(np.arange(0,len(plot_data1[:,0]),1),plot_data1[:,0], plot_data1[:,1], 'green',label=team_1)
+                        # ax.plot3D(np.arange(0,len(plot_data2[:,0]),1),plot_data2[:,0], plot_data2[:,1], 'blue',label=team_2)
+                        # plt.legend()
+                        # plt.show()
                 except Exception as e:
                     print(f'Team not found: {e}')
                 #OLD CODE 
