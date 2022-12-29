@@ -332,7 +332,7 @@ class nba_regressor():
                     data2 = final_data_2.dropna().median(axis=0,skipna=True).to_frame().T
                     if not data1.isnull().values.any() and not data2.isnull().values.any():
                         #Try to find the moving averages that work
-                        ma_range = np.arange(2,30,1)
+                        ma_range = np.arange(2,31,1)
                         #USE THIS AFTER GAMES ARE OVER TO FIGURE OUT WHICH RANGES ARE BEST
                         # team_won = input('who won: ')
                         # correct_ranges = []
