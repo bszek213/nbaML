@@ -33,6 +33,7 @@ from time import sleep
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
 from boruta import BorutaPy
+import joblib
 """
 TODO: Scale data, right now you are not and that may be leading to overfitting issues
 need to finish this, so add inverse_transform() function and scale the prediction data
@@ -99,14 +100,22 @@ class nba_regressor():
         print('len data: ', len(self.all_data))
         self.all_data = self.all_data.drop_duplicates(keep='last')
         print(f'length of data after duplicates are dropped: {len(self.all_data)}')
+    def delete_opp(self):
+        """
+        Drop any opponent data, as it may not be helpful when coming to prediction. Hard to estimate with running average
+        """
+        for col in self.all_data.columns:
+            if 'opp' in col:
+                self.all_data.drop(columns=col,inplace=True)
     def split(self):
+        self.delete_opp()
         for col in self.all_data.columns:
             if 'Unnamed' in col:
                 self.all_data.drop(columns=col,inplace=True)
         self.y = self.all_data['pts']
         self.x = self.all_data.drop(columns=['pts'])
         self.pre_process()
-    def pre_process(self):        
+    def pre_process(self):   
         # Find features with correlation greater than 0.90
         corr_matrix = np.abs(self.x.astype(float).corr())
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
@@ -168,20 +177,50 @@ class nba_regressor():
         plt.tight_layout()
         plt.savefig(join(getcwd(), 'prob_plots_regress',save_name), dpi=300)
         plt.close()
+    def boruta_feature_selection(self):
+        RandForclass = RandomForestRegressor()
+        feat_selector = BorutaPy(
+                verbose=2,
+                estimator=RandForclass,
+                n_estimators='auto',
+                max_iter=10)  # number of iterations to perform
+        feat_selector.fit(np.array(self.x_train),np.array(self.y_train))
+        print(feat_selector.support_)
+        print("Ranking and support for all features")
+        self.drop_cols_boruta = []
+        for i in range(len(feat_selector.support_)):
+            if feat_selector.support_[i]:
+                print(f'Save feature: {self.x_train.columns[i][0]}')
+            else:
+                print(f'Drop feature: {self.x_train.columns[i][0]}')
+                self.drop_cols_boruta.append(self.x_train.columns[i][0])
+        self.drop_cols_boruta.append('game_result')
+        print(f'Features to drop based on Boruta algorithm: {self.drop_cols_boruta}')
+        self.x_train.drop(columns=self.drop_cols_boruta, inplace=True)
+        self.x_test.drop(columns=self.drop_cols_boruta, inplace=True)
+        # RandForclass.fit(self.x_train,self.y_train)
     def machine(self):
         if sys.argv[1] == 'tune':
             #RANDOM FOREST
+            #Drop columns with Boruta Algorithm
+            self.boruta_feature_selection()
             RandForclass = RandomForestRegressor()
+            rows, cols = self.x_train.shape
             Rand_perm = {
-                'criterion' : ["squared_error", "absolute_error", "poisson"],
-                'n_estimators': range(100,500,51),
-                'min_samples_split': np.arange(2, 5, 1, dtype=int),
-                'max_features' : [1, 'sqrt', 'log2']
+                'criterion' : ["squared_error", "poisson"], #absolute_error - takes forever to run
+                'n_estimators': range(300,500,100),
+                # 'min_samples_split': np.arange(2, 5, 1, dtype=int),
+                'max_features' : [1, 'sqrt', 'log2'],
+                'max_depth': np.arange(2,cols,1),
+                'min_samples_leaf': np.arange(1,3,1)
                 }
             #['accuracy', 'adjusted_mutual_info_score', 'adjusted_rand_score', 'average_precision', 'balanced_accuracy', 'completeness_score', 'explained_variance', 'f1', 'f1_macro', 'f1_micro', 'f1_samples', 'f1_weighted', 'fowlkes_mallows_score', 'homogeneity_score', 'jaccard', 'jaccard_macro', 'jaccard_micro', 'jaccard_samples', 'jaccard_weighted', 'matthews_corrcoef', 'max_error', 'mutual_info_score', 'neg_brier_score', 'neg_log_loss', 'neg_mean_absolute_error', 'neg_mean_absolute_percentage_error', 'neg_mean_gamma_deviance', 'neg_mean_poisson_deviance', 'neg_mean_squared_error', 'neg_mean_squared_log_error', 'neg_median_absolute_error', 'neg_root_mean_squared_error', 'normalized_mutual_info_score', 'precision', 'precision_macro', 'precision_micro', 'precision_samples', 'precision_weighted', 'r2', 'rand_score', 'recall', 'recall_macro', 'recall_micro', 'recall_samples', 'recall_weighted', 'roc_auc', 'roc_auc_ovo', 'roc_auc_ovo_weighted', 'roc_auc_ovr', 'roc_auc_ovr_weighted', 'top_k_accuracy', 'v_measure_score']
-            clf_rand = GridSearchCV(RandForclass, Rand_perm, scoring=['neg_root_mean_squared_error','explained_variance'],
-                               refit='neg_root_mean_squared_error',verbose=4, n_jobs=-1)
+            clf_rand = GridSearchCV(RandForclass, Rand_perm, 
+                                scoring=['neg_root_mean_squared_error','explained_variance'],
+                                cv=10,refit='neg_root_mean_squared_error',verbose=3, n_jobs=-1)
             search_rand = clf_rand.fit(self.x_train,self.y_train)
+            joblib.dump(search_rand, "./randomForestModelTuned.joblib", compress=9)
+            print('RandomForestRegressor - best params: ',search_rand.best_params_)
             #MULTI-LAYER PERCEPTRON
             # MLPClass = MLPRegressor()
             # MLP_perm = {
@@ -195,39 +234,20 @@ class nba_regressor():
             # clf_MLP = GridSearchCV(MLPClass, MLP_perm, scoring=['neg_root_mean_squared_error'],
             #                    refit='neg_root_mean_squared_error', verbose=4, n_jobs=-1)
             # search_MLP= clf_MLP.fit(self.x_train,self.y_train)
-            print('RandomForestRegressor - best params: ',search_rand.best_params_)
             # print('MultiLayerPerceptron - best params: ',search_MLP.best_params_)
-            return 'no model'
+            return search_rand
         else:
-            print('fit to tuned model')
+            print('load tuned model')
             #RANDOM FOREST
-            RandForclass = RandomForestRegressor(
-                criterion='squared_error',
-                max_features='sqrt', 
-                min_samples_split=3, 
-                n_estimators=406
-                )#.fit(self.x_train,self.y_train)
-            feat_selector = BorutaPy(
-                verbose=2,
-                estimator=RandForclass,
-                n_estimators='auto',
-                max_iter=10  # number of iterations to perform
-            )
-            feat_selector.fit(np.array(self.x_train),np.array(self.y_train))
-            print(feat_selector.support_)
-            print("Ranking and support for all features")
-            self.drop_cols_boruta = []
-            for i in range(len(feat_selector.support_)):
-                if feat_selector.support_[i]:
-                    print(f'Save feature: {self.x_train.columns[i][0]}')
-                else:
-                    print(f'Drop feature: {self.x_train.columns[i][0]}')
-                    self.drop_cols_boruta.append(self.x_train.columns[i][0])
-            self.drop_cols_boruta.append('game_result')
-            print(f'Features to drop based on Boruta algorithm: {self.drop_cols_boruta}')
-            self.x_train.drop(columns=self.drop_cols_boruta, inplace=True)
-            self.x_test.drop(columns=self.drop_cols_boruta, inplace=True)
-            RandForclass.fit(self.x_train,self.y_train)
+            RandForclass=joblib.load("./randomForestModelTuned.joblib")
+            print(f'Current RandomForestRegressor Parameters: {RandForclass.best_params_}')
+            # RandForclass = RandomForestRegressor(
+            #     criterion='squared_error',
+            #     max_features='sqrt', 
+            #     min_samples_split=3, 
+            #     n_estimators=406
+            #     )#.fit(self.x_train,self.y_train)
+            
             RAND_rmse = mean_squared_error(self.y_test, RandForclass.predict(self.x_test),squared=False)
             #MULTILAYER PERCEPTRON
             # MLPClass = MLPRegressor(
@@ -356,8 +376,8 @@ class nba_regressor():
                         team_2_count = 0
                         team_2_ma = []
                         for ma in tqdm(ma_range):
-                            data1 = final_data_1.dropna().rolling(ma).mean()
-                            data2 = final_data_2.dropna().rolling(ma).mean()
+                            data1 = final_data_1.dropna().rolling(ma).median()
+                            data2 = final_data_2.dropna().rolling(ma).median()
                             team_1_predict = model.predict(data1.iloc[-1:])
                             team_2_predict = model.predict(data2.iloc[-1:])
                             if team_1_predict > team_2_predict:
@@ -526,6 +546,7 @@ class nba_regressor():
                 #     print(f'Score prediction for {team_1} last 20 game: {team_1_data_last5[0]} points')
                 #     print(f'Score prediction for {team_2} last 20 game: {team_2_data_last5[0]} points')
     def feature_importances(self,model):
+        # model.best_estimator_.feature_importances_?
         if model != "no model":
             if 'keras' in str(model):
                 imps = PermutationImportance(model,random_state=1).fit(self.x_test, self.y_test)
@@ -545,7 +566,7 @@ class nba_regressor():
                 plt.tight_layout()
                 plt.savefig(join(getcwd(), save_name), dpi=300)
             else:
-                feature_imp = pd.Series(model.feature_importances_,index=self.x_test.columns).sort_values(ascending=False)
+                feature_imp = pd.Series(model.best_estimator_.feature_importances_,index=self.x_test.columns).sort_values(ascending=False)
                 plt.close()
                 plt.figure()
                 sns.barplot(x=feature_imp,y=feature_imp.index)
@@ -563,9 +584,9 @@ def main():
     # class_inst.read_hyper_params()
     class_inst.split()
     model = class_inst.machine()
-    if not sys.argv[1] == 'tune':
-        class_inst.predict_two_teams(model)
-        class_inst.feature_importances(model)
+    # if not sys.argv[1] == 'tune':
+    class_inst.predict_two_teams(model)
+    class_inst.feature_importances(model)
     print("--- %s seconds ---" % (time.time() - start_time))
 if __name__ == '__main__':
     main()

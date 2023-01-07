@@ -2,7 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+#Saved models
+randomForestModelTuned.joblib
 # C extensions
 *.so
 
